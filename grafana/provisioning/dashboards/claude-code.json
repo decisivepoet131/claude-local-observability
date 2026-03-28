@@ -1,0 +1,264 @@
+{
+  "title": "Claude Code Observability",
+  "uid": "claude-code-observability",
+  "description": "Token usage, cost, sessions, tools and logs for Claude Code",
+  "tags": ["claude-code"],
+  "timezone": "browser",
+  "refresh": "30s",
+  "schemaVersion": 38,
+  "graphTooltip": 1,
+  "time": { "from": "now-24h", "to": "now" },
+  "templating": {
+    "list": [
+      {
+        "name": "plan_token_limit",
+        "label": "Plan Token Limit",
+        "type": "custom",
+        "query": "5000000,10000000,50000000,100000000",
+        "current": { "value": "50000000", "text": "50000000" },
+        "options": [
+          { "value": "5000000",   "text": "5M (Pro)" },
+          { "value": "10000000",  "text": "10M" },
+          { "value": "50000000",  "text": "50M (Max)" },
+          { "value": "100000000", "text": "100M" }
+        ],
+        "hide": 0
+      }
+    ]
+  },
+  "panels": [
+
+    { "type": "row", "title": "Overview", "gridPos": { "x": 0, "y": 0, "w": 24, "h": 1 }, "id": 1 },
+
+    {
+      "id": 2, "type": "stat", "title": "Total Tokens Used",
+      "gridPos": { "x": 0, "y": 1, "w": 4, "h": 4 },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background", "graphMode": "none" },
+      "fieldConfig": { "defaults": { "unit": "short", "color": { "mode": "fixed", "fixedColor": "purple" } } },
+      "targets": [{ "datasource": { "type": "prometheus" }, "expr": "sum(increase(claude_code_claude_code_token_usage_tokens_total[$__range]))", "instant": true }]
+    },
+
+    {
+      "id": 3, "type": "stat", "title": "Tokens Remaining in Plan",
+      "gridPos": { "x": 4, "y": 1, "w": 4, "h": 4 },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background", "graphMode": "none" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red",    "value": null },
+              { "color": "yellow", "value": 10000000 },
+              { "color": "green",  "value": 25000000 }
+            ]
+          }
+        }
+      },
+      "targets": [{ "datasource": { "type": "prometheus" }, "expr": "$plan_token_limit - sum(increase(claude_code_claude_code_token_usage_tokens_total[$__range]))", "instant": true }]
+    },
+
+    {
+      "id": 4, "type": "stat", "title": "Sessions",
+      "description": "Number of user prompts in the selected time range",
+      "gridPos": { "x": 8, "y": 1, "w": 4, "h": 4 },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background", "graphMode": "none" },
+      "fieldConfig": { "defaults": { "unit": "short", "color": { "mode": "fixed", "fixedColor": "blue" } } },
+      "targets": [{
+        "datasource": { "type": "loki" },
+        "expr": "sum(count_over_time({service_name=\"claude-code\"} |= \"user_prompt\" [$__range]))",
+        "instant": true
+      }]
+    },
+
+    {
+      "id": 5, "type": "stat", "title": "Cost per 1K Tokens",
+      "description": "Average cost per 1000 tokens in the selected time range",
+      "gridPos": { "x": 12, "y": 1, "w": 4, "h": 4 },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background", "graphMode": "none" },
+      "fieldConfig": { "defaults": { "unit": "currencyUSD", "decimals": 4, "color": { "mode": "fixed", "fixedColor": "orange" } } },
+      "targets": [{ "datasource": { "type": "prometheus" }, "expr": "sum(increase(claude_code_claude_code_cost_usage_USD_total[$__range])) / (sum(increase(claude_code_claude_code_token_usage_tokens_total[$__range])) / 1000)", "instant": true }]
+    },
+
+    {
+      "id": 6, "type": "stat", "title": "Total Cost",
+      "gridPos": { "x": 16, "y": 1, "w": 4, "h": 4 },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background", "graphMode": "none" },
+      "fieldConfig": { "defaults": { "unit": "currencyUSD", "color": { "mode": "thresholds" }, "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "yellow", "value": 1 }, { "color": "red", "value": 5 }] } } },
+      "targets": [{ "datasource": { "type": "prometheus" }, "expr": "sum(increase(claude_code_claude_code_cost_usage_USD_total[$__range]))", "instant": true }]
+    },
+
+    {
+      "id": 7, "type": "stat", "title": "Cache Efficiency",
+      "gridPos": { "x": 20, "y": 1, "w": 4, "h": 4 },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background", "graphMode": "none" },
+      "fieldConfig": { "defaults": { "unit": "percentunit", "color": { "mode": "thresholds" }, "thresholds": { "mode": "absolute", "steps": [{ "color": "red", "value": null }, { "color": "yellow", "value": 0.3 }, { "color": "green", "value": 0.6 }] } } },
+      "targets": [{ "datasource": { "type": "prometheus" }, "expr": "sum(increase(claude_code_claude_code_token_usage_tokens_total{type=\"cacheRead\"}[$__range])) / sum(increase(claude_code_claude_code_token_usage_tokens_total[$__range]))", "instant": true }]
+    },
+
+    { "type": "row", "title": "Token Usage", "gridPos": { "x": 0, "y": 5, "w": 24, "h": 1 }, "id": 8 },
+
+    {
+      "id": 9, "type": "timeseries", "title": "Token Rate by Type",
+      "gridPos": { "x": 0, "y": 6, "w": 16, "h": 8 },
+      "options": { "tooltip": { "mode": "multi" }, "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["sum"] } },
+      "fieldConfig": { "defaults": { "unit": "short", "custom": { "lineWidth": 2, "fillOpacity": 10 } } },
+      "targets": [{ "datasource": { "type": "prometheus" }, "expr": "sum by (type) (rate(claude_code_claude_code_token_usage_tokens_total[$__rate_interval]))", "legendFormat": "{{type}}" }]
+    },
+
+    {
+      "id": 10, "type": "piechart", "title": "Token Breakdown",
+      "gridPos": { "x": 16, "y": 6, "w": 8, "h": 8 },
+      "options": { "pieType": "donut", "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["sum"] } },
+      "targets": [{ "datasource": { "type": "prometheus" }, "expr": "sum by (type) (increase(claude_code_claude_code_token_usage_tokens_total[$__range]))", "legendFormat": "{{type}}", "instant": true }]
+    },
+
+    { "type": "row", "title": "Model Breakdown", "gridPos": { "x": 0, "y": 14, "w": 24, "h": 1 }, "id": 20 },
+
+    {
+      "id": 22, "type": "bargauge", "title": "Tokens by Model",
+      "description": "Total tokens consumed per model in the selected time range",
+      "gridPos": { "x": 0, "y": 15, "w": 12, "h": 7 },
+      "options": {
+        "orientation": "horizontal",
+        "reduceOptions": { "calcs": ["lastNotNull"], "values": false },
+        "displayMode": "gradient",
+        "valueMode": "color",
+        "showUnfilled": true
+      },
+      "fieldConfig": {
+        "defaults": { "unit": "short", "color": { "mode": "palette-classic" }, "min": 0 }
+      },
+      "targets": [{
+        "datasource": { "type": "prometheus" },
+        "expr": "sum by (model) (increase(claude_code_claude_code_token_usage_tokens_total[$__range]))",
+        "instant": true,
+        "legendFormat": "{{model}}"
+      }]
+    },
+
+    {
+      "id": 23, "type": "bargauge", "title": "Cost by Model",
+      "description": "Total cost per model in the selected time range",
+      "gridPos": { "x": 12, "y": 15, "w": 12, "h": 7 },
+      "options": {
+        "orientation": "horizontal",
+        "reduceOptions": { "calcs": ["lastNotNull"], "values": false },
+        "displayMode": "gradient",
+        "valueMode": "color",
+        "showUnfilled": true
+      },
+      "fieldConfig": {
+        "defaults": { "unit": "currencyUSD", "decimals": 4, "color": { "mode": "palette-classic" }, "min": 0 }
+      },
+      "targets": [{
+        "datasource": { "type": "prometheus" },
+        "expr": "sum by (model) (increase(claude_code_claude_code_cost_usage_USD_total[$__range]))",
+        "instant": true,
+        "legendFormat": "{{model}}"
+      }]
+    },
+
+    { "type": "row", "title": "Cost", "gridPos": { "x": 0, "y": 22, "w": 24, "h": 1 }, "id": 11 },
+
+    {
+      "id": 12, "type": "timeseries", "title": "Cumulative Cost (USD)",
+      "gridPos": { "x": 0, "y": 23, "w": 8, "h": 7 },
+      "options": { "tooltip": { "mode": "single" }, "legend": { "displayMode": "list", "placement": "bottom" } },
+      "fieldConfig": { "defaults": { "unit": "currencyUSD", "custom": { "lineWidth": 2, "fillOpacity": 20 }, "color": { "mode": "fixed", "fixedColor": "red" } } },
+      "targets": [{ "datasource": { "type": "prometheus" }, "expr": "sum(claude_code_claude_code_cost_usage_USD_total)", "legendFormat": "Total Cost" }]
+    },
+
+    {
+      "id": 24, "type": "timeseries", "title": "Hourly Spend",
+      "description": "Cost incurred per hour — useful for spotting heavy usage periods",
+      "gridPos": { "x": 8, "y": 23, "w": 8, "h": 7 },
+      "options": { "tooltip": { "mode": "single" }, "legend": { "displayMode": "list", "placement": "bottom" } },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "currencyUSD",
+          "custom": { "lineWidth": 0, "fillOpacity": 80, "drawStyle": "bars", "barAlignment": 0 },
+          "color": { "mode": "fixed", "fixedColor": "orange" }
+        }
+      },
+      "targets": [{ "datasource": { "type": "prometheus" }, "expr": "sum(increase(claude_code_claude_code_cost_usage_USD_total[1h]))", "legendFormat": "Hourly Cost" }]
+    },
+
+    {
+      "id": 13, "type": "timeseries", "title": "Cost Rate (USD / min)",
+      "gridPos": { "x": 16, "y": 23, "w": 8, "h": 7 },
+      "options": { "tooltip": { "mode": "single" }, "legend": { "displayMode": "list", "placement": "bottom" } },
+      "fieldConfig": { "defaults": { "unit": "currencyUSD", "custom": { "lineWidth": 2, "fillOpacity": 10 }, "color": { "mode": "fixed", "fixedColor": "yellow" } } },
+      "targets": [{ "datasource": { "type": "prometheus" }, "expr": "sum(rate(claude_code_claude_code_cost_usage_USD_total[$__rate_interval])) * 60", "legendFormat": "Cost/min" }]
+    },
+
+    { "type": "row", "title": "Tools Invoked", "gridPos": { "x": 0, "y": 30, "w": 24, "h": 1 }, "id": 14 },
+
+    {
+      "id": 15, "type": "bargauge", "title": "Tool Usage Frequency",
+      "description": "Count of tool calls per tool type in the selected time range",
+      "gridPos": { "x": 0, "y": 31, "w": 10, "h": 8 },
+      "options": {
+        "orientation": "horizontal",
+        "reduceOptions": { "calcs": ["lastNotNull"], "values": false },
+        "displayMode": "gradient",
+        "valueMode": "color",
+        "showUnfilled": true
+      },
+      "fieldConfig": {
+        "defaults": { "unit": "short", "color": { "mode": "palette-classic" }, "min": 0 }
+      },
+      "targets": [{
+        "datasource": { "type": "loki" },
+        "expr": "sum by (tool_name) (count_over_time({service_name=\"claude-code\"} |= \"tool_result\" [$__range]))",
+        "instant": true,
+        "legendFormat": "{{tool_name}}"
+      }]
+    },
+
+    {
+      "id": 21, "type": "logs", "title": "Tool Invocation Log",
+      "gridPos": { "x": 10, "y": 31, "w": 14, "h": 8 },
+      "options": {
+        "dedupStrategy": "none", "enableLogDetails": true, "prettifyLogMessage": false,
+        "showTime": true, "showLabels": false, "showCommonLabels": false,
+        "sortOrder": "Descending", "wrapLogMessage": false
+      },
+      "targets": [{
+        "datasource": { "type": "loki" },
+        "expr": "{service_name=\"claude-code\"} |= \"tool_result\" | line_format \"[{{.tool_name}}] {{.tool_result}}\""
+      }]
+    },
+
+    { "type": "row", "title": "Prompts", "gridPos": { "x": 0, "y": 39, "w": 24, "h": 1 }, "id": 16 },
+
+    {
+      "id": 17, "type": "logs", "title": "User Prompts",
+      "gridPos": { "x": 0, "y": 40, "w": 24, "h": 10 },
+      "options": {
+        "dedupStrategy": "none", "enableLogDetails": true, "prettifyLogMessage": false,
+        "showTime": true, "showLabels": false, "showCommonLabels": false,
+        "sortOrder": "Descending", "wrapLogMessage": true
+      },
+      "targets": [{
+        "datasource": { "type": "loki" },
+        "expr": "{service_name=\"claude-code\"} |= \"user_prompt\" | line_format \"{{.prompt}}\""
+      }]
+    },
+
+    { "type": "row", "title": "All Logs", "gridPos": { "x": 0, "y": 50, "w": 24, "h": 1 }, "id": 18 },
+
+    {
+      "id": 19, "type": "logs", "title": "Claude Code Event Stream",
+      "gridPos": { "x": 0, "y": 51, "w": 24, "h": 12 },
+      "options": {
+        "dedupStrategy": "none", "enableLogDetails": true, "prettifyLogMessage": false,
+        "showTime": true, "showLabels": true, "showCommonLabels": false,
+        "sortOrder": "Descending", "wrapLogMessage": false
+      },
+      "targets": [{ "datasource": { "type": "loki" }, "expr": "{service_name=\"claude-code\"}" }]
+    }
+
+  ]
+}
