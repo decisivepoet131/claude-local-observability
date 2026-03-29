@@ -62,6 +62,43 @@ services:
       - prometheus
       - loki
 
+  langfuse-db:
+    image: postgres:15-alpine
+    container_name: langfuse-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: langfuse
+      POSTGRES_USER: langfuse
+      POSTGRES_PASSWORD: langfuse
+    volumes:
+      - langfuse_db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U langfuse"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks:
+      - observability
+
+  langfuse:
+    image: langfuse/langfuse:2
+    container_name: langfuse
+    restart: unless-stopped
+    depends_on:
+      langfuse-db:
+        condition: service_healthy
+    ports:
+      - "3001:3000"
+    environment:
+      DATABASE_URL: postgresql://langfuse:langfuse@langfuse-db:5432/langfuse
+      NEXTAUTH_SECRET: local-nextauth-secret
+      SALT: local-salt-value
+      NEXTAUTH_URL: http://localhost:3001
+      TELEMETRY_ENABLED: "false"
+      LANGFUSE_ENABLE_EXPERIMENTAL_FEATURES: "false"
+    networks:
+      - observability
+
 networks:
   observability:
     driver: bridge
@@ -70,3 +107,4 @@ volumes:
   prometheus_data:
   loki_data:
   grafana_data:
+  langfuse_db:

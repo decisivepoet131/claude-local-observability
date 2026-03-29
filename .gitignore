@@ -1,1 +1,4 @@
 scripts/startup.log
+experiments/.env
+__pycache__/
+*.pyc
